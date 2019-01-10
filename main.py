@@ -67,14 +67,58 @@ def input_params():
   # Generate cut mesh (used in FEM calculations)
   cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
                        mat_interf_loc)
+  num_nodes = len(cut_mesh)
+  num_elems = num_nodes - 1
+
+  return 0
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Assemble material property vectors
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def k_vector_assemble():
+  k_elem = mat_A_conductivity * np.ones(len(cut_mesh)-1)
+  k_elem[np.searchsorted(base_mesh, mat_interf_loc):] = material_B_conductivity
+
+  return k_elem
+
+def q_vector_assemble():
+  q_elem = np.zeros(len(cut_mesh)-1)
+  if mat_A_source == True:
+    q_elem[:np.searchsorted(base_mesh, mat_interf_loc)] = mat_A_src_value
+  if mat_B_source == True:
+    q_elem[np.searchsorted(base_mesh, mat_interf_loc):] = mat_B_src_value
+
+  return q_elem
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Construct System to Solve
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+def construct_system():
 # Weak Form: 
-# int_domain (grad T k grad b) - int_bd_domain (b k grad t n) = 
+# int_domain (k grad T grad b) = int_bd_domain (b k grad T n) + 
 #     int_domain (b q)
+# [K]{T} = {F} + {B}
+  K = np.zeros((num_nodes, num_nodes))         # Stiffness Matrix
+  F = np.zeros(num_nodes)                      # Force Vector
+  B = np.zeros(num_nodes)                      # Boundary Integral Vector
+
+  # Assemble stiffness matrix 
+  for elem in range(num_elems):
+    K_elem = np.zeros((porder+1,porder+1))
+    J_elem = (cut_mesh[elem + 1] - cut_mesh[elem])/2
+    for i in range(porder+1):
+      for j in range(porder+1):
+        K_elem[i,j] = 
+
+
+  # Assemble Force Vector
+  for elem in range(num_elems):
+    aoeu
+
+  # Assemble Boundary Integral Vector
+  
+
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
