@@ -21,63 +21,12 @@ from math import sqrt
 #    - Mesh is not cut; Phantom Node XFEM solution
 # ******************************************************************************
 
-def input_params():
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Input/Problem Specification
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  
-  # Mesh Properties
-  x_min = 0.
-  x_max = 1.
-  delta_x = 0.2
-  init_num_elems = 5
-  mat_interf_loc = 0.5
-  
-  # Boundary Condtitions (Options: Neumann, Dirichlet)
-  left_BC_type = 'Neumann'
-  left_BC_value = 0.0
-  right_BC_type = 'Dirichlet'
-  right_BC_value = 400.0
-  
-  # Material Properties
-  mat_A_conductivity = 0.3
-  mat_B_conductivity = 0.02
-  mat_A_source = True
-  mat_A_src_value = 2.0                            # Optional Variable
-  mat_B_source = True
-  mat_B_src_value = 3.5                            # Optional Variable
-  
-  # Methods and Solvers Options
-  methods = ['FEM', 'XFEM-C']                      # Options: FEM, XFEM-C, XFEM-PN
-  l_solver = 'Jacobi'                              # Options: Direct, Jacobi
-  l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
-  porder = 1                                       # Polynomial degree (must be 1 for now)
-  
-  # Additional Variables
-  eps = 1.0e-8
-  
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Mesh Construction
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  
-  # Construct base, equally spaced mesh (used in XFEM calculations)
-  delta_x = (x_max - x_min)/init_num_elems
-  base_mesh = np.arange(x_min, x_max + eps, delta_x)
-  
-  # Generate cut mesh (used in FEM calculations)
-  cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
-                       mat_interf_loc)
-  num_nodes = len(cut_mesh)
-  num_elems = num_nodes - 1
-
-  return 0
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Assemble material property vectors
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def k_vector_assemble():
   k_elem = mat_A_conductivity * np.ones(len(cut_mesh)-1)
-  k_elem[np.searchsorted(base_mesh, mat_interf_loc):] = material_B_conductivity
+  k_elem[np.searchsorted(base_mesh, mat_interf_loc):] = mat_B_conductivity
 
   return k_elem
 
@@ -94,32 +43,93 @@ def q_vector_assemble():
 # Construct System to Solve
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-def construct_system():
+def construct_fem_system():
 # Weak Form: 
 # int_domain (k grad T grad b) = int_bd_domain (b k grad T n) + 
 #     int_domain (b q)
 # [K]{T} = {F} + {B}
+
   K = np.zeros((num_nodes, num_nodes))         # Stiffness Matrix
   F = np.zeros(num_nodes)                      # Force Vector
-  B = np.zeros(num_nodes)                      # Boundary Integral Vector
 
-  # Assemble stiffness matrix 
+  # Assemble stiffness matrix and Force Vector
   for elem in range(num_elems):
     K_elem = np.zeros((porder+1,porder+1))
+    F_elem = np.zeros(porder+1)
     J_elem = (cut_mesh[elem + 1] - cut_mesh[elem])/2
     for i in range(porder+1):
+      for k in range(porder+1):
+        F_elem[i] += b[0,i] * q_mat_elem[elem] * J_elem * wq[k]
       for j in range(porder+1):
-        K_elem[i,j] = 
+        for k in range(porder+1):
+          K_elem[i,j] += (k_mat_elem[elem] * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+                         J_elem * wq[k]
+    K[elem:elem+porder+1,elem:elem+porder+1] += K_elem
+    F[elem:elem+porder+1] += F_elem
 
-
-  # Assemble Force Vector
-  for elem in range(num_elems):
-    aoeu
-
-  # Assemble Boundary Integral Vector
+  # Apply Boundary Integral
+  K, F = BC_apply(K, F)
   
+  return (K, F)
 
+#Def construct_xfem_c_system():
+#  aoeu
+#
+#  return (K, F)
+#
+#Def construct_xfem_pn_system():
+#  aoeu
+#
+#  return (K, F)
 
+def BC_apply(A, b):
+  if left_BC_type == 'Dirichlet':
+    for i in range(len(b)):
+      b[i] -= (A[i,0] * left_BC_value)
+    A = np.delete(np.delete(A, 0 , 0), 0, 1)
+    b = np.delete(b, 0)
+  elif left_BC_type == 'Neumann':
+    b[0] += left_BC_value
+  else:
+    print("Error!: Applicable Boundary Conditions are Dirichlet or Neumann!")
+
+  if right_BC_type == 'Dirichlet':
+    for i in range(len(b)):
+      b[i] -= (A[i,-1] * right_BC_value)
+    A = np.delete(np.delete(A, -1, 0), -1, 1)
+    b = np.delete(b, -1)
+  elif right_BC_type == 'Neumann':
+    b[-1] += right_BC_value
+  else:
+    print("Error!: Applicable Boundary Conditions are Dirichlet on Neumann!")
+
+  return (A, b)
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Linear Solver
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def Jacobi_l_solve(A, b):
+  err = 1.0e12
+  iter_count = 0
+  
+  x = np.zeros_like(b)
+
+  while (iter_count < max_iterations) and (err > l_tol):
+    iter_count += 1
+    x_new = np.zeros_like(x)
+
+    for i in range(len(x)):
+      s1 = np.dot(A[i,:i], x[:i])
+      s2 = np.dot(A[i,i + 1:], x[i + 1:])
+      x_new[i] = (b[i] - s1 - s2) / A[i,i]
+    err = np.linalg.norm(np.dot(A, x_new) - b)
+    if l_output:
+      print('Iteration Number: ' + str(iter_count) + ' L2 Error Norm: ' +\
+            str(err))
+    x = x_new
+
+  return x
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Quadrature Point and Weight Generation
@@ -175,10 +185,76 @@ def feshpln(xv, p):
 
   return (shapefunc, dhdx)
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Input/Problem Specification
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Mesh Properties
+x_min = 0.
+x_max = 1.
+delta_x = 0.2
+init_num_elems = 5
+mat_interf_loc = 0.5
+
+# Boundary Condtitions (Options: Neumann, Dirichlet)
+left_BC_type = 'Neumann'
+left_BC_value = 0.0
+right_BC_type = 'Dirichlet'
+right_BC_value = 400.0
+
+# Material Properties
+mat_A_conductivity = 0.3
+mat_B_conductivity = 0.02
+mat_A_source = True
+mat_A_src_value = 2.0                            # Optional Variable
+mat_B_source = True
+mat_B_src_value = 3.5                            # Optional Variable
+
+# Methods and Solvers Options
+methods = ['FEM', 'XFEM-C']                      # Options: FEM, XFEM-C, XFEM-PN
+l_solver = 'Jacobi'                              # Options: Direct, Jacobi
+l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
+max_iterations = 1.0e4                           # Maximum number of nonconverged linear iterations
+l_output = True                                  # Toggle output of the linear solver
+porder = 1                                       # Polynomial degree (must be 1)
+
+# Additional Variables
+eps = 1.0e-8
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Mesh Construction
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Construct base, equally spaced mesh (used in XFEM calculations)
+delta_x = (x_max - x_min)/init_num_elems
+base_mesh = np.arange(x_min, x_max + eps, delta_x)
+
+# Generate cut mesh (used in FEM calculations)
+cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
+                     mat_interf_loc)
+num_nodes = len(cut_mesh)
+num_elems = num_nodes - 1
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Run Problem
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-input_params()
 xq, wq = GLNodeWt(porder + 1)                    # Generate quadrature/weights
 b, dbdx = feshpln(xq, porder)                    # Generate shape functs and their first derivatives
+k_mat_elem = k_vector_assemble()
+q_mat_elem = q_vector_assemble()
+K, F = construct_fem_system()
 
+print(K)
+print('\n')
+print(F)
+
+T_sub = Jacobi_l_solve(K, F)
+
+if left_BC_type == 'Dirichlet':
+  T = np.append(np.array(left_BC_value),T_sub)
+else:
+  T = T_sub
+if right_BC_type == 'Dirichlet':
+  T = np.append(T_sub, np.array(right_BC_value))
+
+np.savetxt('results.csv',T,fmt='%.8e')
