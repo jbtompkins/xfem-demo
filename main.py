@@ -49,10 +49,14 @@ def construct_fem_system():
 #     int_domain (b q)
 # [K]{T} = {F} + {B}
 
+  # Construct material vectors
+  k_mat_elem = k_vector_assemble()
+  q_mat_elem = q_vector_assemble()
+
   K = np.zeros((num_nodes, num_nodes))         # Stiffness Matrix
   F = np.zeros(num_nodes)                      # Force Vector
 
-  # Assemble stiffness matrix and Force Vector
+  # Assemble Stiffness Matrix and Force Vector
   for elem in range(num_elems):
     K_elem = np.zeros((porder+1,porder+1))
     F_elem = np.zeros(porder+1)
@@ -72,15 +76,79 @@ def construct_fem_system():
   
   return (K, F)
 
-#Def construct_xfem_c_system():
-#  aoeu
-#
-#  return (K, F)
-#
-#Def construct_xfem_pn_system():
-#  aoeu
-#
-#  return (K, F)
+def construct_xfem_system(xfem_method):
+  K = np.zeros((num_nodes+1, num_nodes+1))
+  F = np.zeros(num_nodes+1)
+
+  # Determine number of split element
+  cut_elnum = np.searchsorted(base_mesh, mat_interf_loc)
+
+  # Forward Assembly of Stiffness Matrix and Force Vector to split element:
+  if cut_elnum > 1:
+    for felem in range(cut_elnum - 1):
+      K_elem = np.zeros((porder+1,porder+1))
+      F_elem = np.zeros(porder+1)
+      J_elem = (base_mesh[felem + 1] - base_mesh[felem])/2
+      for i in range(porder+1):
+        if mat_A_source:
+          for k in range(porder+1):
+            F_elem[i] += b[0,i] * mat_A_src_value * J_elem * wq[k]
+        for j in range(porder+1):
+          for k in range(porder+1):
+            K_elem[i,j] += (mat_A_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+                           J_elem * wq[k]
+      K[felem:felem+porder+1,felem:felem+porder+1] += K_elem
+      F[felem:felem+porder+1] += F_elem
+
+  # Backward Assembly of Stiffness Matrix and Force Vector to split element:
+  if cut_elnum < num_nodes:
+    for belem in range(num_nodes-1, cut_elnum+1, -1):
+      K_elem = np.zeros((porder+1,porder+1))
+      F_elem = np.zeros(porder+1)
+      J_elem = (base_mesh[(belem + 1)-2] - base_mesh[(belem)-2])/2
+      for i in range(porder+1):
+        if mat_B_source:
+          for k in range(porder+1):
+            F_elem[i] += b[0,i] * mat_B_src_value * J_elem * wq[k]
+        for j in range(porder+1):
+          for k in range(porder+1):
+            K_elem[i,j] += (mat_B_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+                           J_elem * wq[k]
+      K[belem:belem+porder+1,belem:belem+porder+1] += K_elem
+      F[belem:belem+porder+1] += F_elem
+
+  # Enriched Element Contribution
+  if xfem_method == 'XFEM-C':
+    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] =
+        classic_xfem_cut_elem()
+  elif ifem_method == 'XFEM-PN':
+    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] =
+        pn_xfem_cut_elem()
+
+  print(K)
+  print('\n')
+  print(F)
+
+  quit()
+
+  return (K, F)
+
+#def classic_xfem_split_elem():
+# Classical XFEM Literature Definition:
+# u_h(x) = Sum_{j \in NEN} N_j(x) u_j + Sum_{j \in NEN^*} N_j^*(x) psi(x) a_j
+#   NEN - Number elemental nodes
+#   N_j - FE Basis Functions
+#   psi - XFEM Enrichment Function
+#   u_j - Storage vector for traditional FEM solution
+#   a_j - Storage vector for enriched nodes
+#   We use psi(x) = Heaviside(phi(x)) [step enrichments]
+
+#def pn_xfem_split_elem():
+# Phantom Node Literature Definition:
+# u^h(x) = u_1^h(x) H(phi(x)) + u_2^h(x) H(-phi(x))
+# Phantom Node and Classical XFEM Methods are functionally identical when
+#   psi(x) = H(phi(x)), but the implementation is not the same.
+
 
 def BC_apply(A, b):
   if left_BC_type == 'Dirichlet':
@@ -215,7 +283,7 @@ methods = ['FEM', 'XFEM-C']                      # Options: FEM, XFEM-C, XFEM-PN
 l_solver = 'Jacobi'                              # Options: Direct, Jacobi
 l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
 max_iterations = 1.0e4                           # Maximum number of nonconverged linear iterations
-l_output = True                                  # Toggle output of the linear solver
+l_output = False                                  # Toggle output of the linear solver
 porder = 1                                       # Polynomial degree (must be 1)
 
 # Additional Variables
@@ -235,26 +303,38 @@ cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
 num_nodes = len(cut_mesh)
 num_elems = num_nodes - 1
 
+print(base_mesh)
+print(cut_mesh)
+print(mat_interf_loc)
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Run Problem
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 xq, wq = GLNodeWt(porder + 1)                    # Generate quadrature/weights
 b, dbdx = feshpln(xq, porder)                    # Generate shape functs and their first derivatives
-k_mat_elem = k_vector_assemble()
-q_mat_elem = q_vector_assemble()
-K, F = construct_fem_system()
+K = []
+F = []
+T = []
 
-print(K)
-print('\n')
-print(F)
+# Loop over solution methods
+for i in range(len(methods)):
+  K.append(np.zeros(1))
+  F.append(np.zeros(1))
+  T.append(np.zeros(1))
+  if methods[i] == 'FEM':
+    K[i], F[i] = construct_fem_system()
+  elif methods[i] == 'XFEM-C' or methods[i] == 'XFEM-PN':
+    K[i], F[i] = construct_xfem_system(methods[i])
+  else:
+    print('Invalid method input: options are FEM, XFEM-C, XFEM-PN')
 
-T_sub = Jacobi_l_solve(K, F)
+  T_sub = Jacobi_l_solve(K[i], F[i])
 
-if left_BC_type == 'Dirichlet':
-  T = np.append(np.array(left_BC_value),T_sub)
-else:
-  T = T_sub
-if right_BC_type == 'Dirichlet':
-  T = np.append(T_sub, np.array(right_BC_value))
+  if left_BC_type == 'Dirichlet':
+    T[i] = np.append(np.array(left_BC_value),T_sub)
+  else:
+    T[i] = T_sub
+  if right_BC_type == 'Dirichlet':
+    T[i] = np.append(T_sub, np.array(right_BC_value))
 
-np.savetxt('results.csv',T,fmt='%.8e')
+  np.savetxt('results_'+methods[i]+'.csv',T[i],fmt='%.8e')
