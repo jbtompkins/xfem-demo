@@ -73,6 +73,11 @@ def construct_fem_system():
 
   # Apply Boundary Integral
   K, F = BC_apply(K, F)
+
+  print(K)
+  print('\n')
+  print(F)
+  print('\n')
   
   return (K, F)
 
@@ -118,18 +123,23 @@ def construct_xfem_system(xfem_method):
       F[belem:belem+porder+1] += F_elem
 
   # Enriched Element Contribution
-  if xfem_method == 'XFEM-C':
-    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] =
-        classic_xfem_cut_elem()
-  elif ifem_method == 'XFEM-PN':
-    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] =
-        pn_xfem_cut_elem()
+#  if xfem_method == 'XFEM-C':
+#    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
+#        classic_xfem_cut_elem()
+#  elif xfem_method == 'XFEM-PN':
+#    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
+#        pn_xfem_cut_elem()
+        
+  K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
+      pn_xfem_cut_elem(cut_elnum)
+
+  # Apply Boundary Integral
+  K, F = BC_apply(K, F)
 
   print(K)
   print('\n')
   print(F)
-
-  quit()
+  print('\n')
 
   return (K, F)
 
@@ -142,13 +152,34 @@ def construct_xfem_system(xfem_method):
 #   u_j - Storage vector for traditional FEM solution
 #   a_j - Storage vector for enriched nodes
 #   We use psi(x) = Heaviside(phi(x)) [step enrichments]
+#  
 
-#def pn_xfem_split_elem():
+def pn_xfem_cut_elem(cut_elnum):
 # Phantom Node Literature Definition:
 # u^h(x) = u_1^h(x) H(phi(x)) + u_2^h(x) H(-phi(x))
 # Phantom Node and Classical XFEM Methods are functionally identical when
 #   psi(x) = H(phi(x)), but the implementation is not the same.
+  A_k = np.zeros((4,4))
+  F_k = np.zeros(4)
+  
+  for pnode in range(0,len(F_k),2):
+    J_elem = abs(mat_interf_loc - base_mesh[(cut_elnum-1)+pnode/2])/2
+    for i in range(porder+1):
+      for k in range(porder+1):
+        if (pnode < 2) and mat_A_source:
+          F_k[pnode+i] += b[0,i] * mat_A_src_value * J_elem * wq[k]
+        elif (pnode >= 2) and mat_B_source:
+          F_k[pnode+i] += b[0,i] * mat_B_src_value * J_elem * wq[k]
+      for j in range(porder+1):
+        for k in range(porder+1):
+          if pnode < 2:
+            A_k[pnode+i,pnode+j] += (mat_A_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+                                    J_elem * wq[k]
+          elif pnode >= 2:
+            A_k[pnode+i,pnode+j] += (mat_B_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+                                    J_elem * wq[k]
 
+  return A_k, F_k
 
 def BC_apply(A, b):
   if left_BC_type == 'Dirichlet':
@@ -279,7 +310,7 @@ mat_B_source = True
 mat_B_src_value = 3.5                            # Optional Variable
 
 # Methods and Solvers Options
-methods = ['FEM', 'XFEM-C']                      # Options: FEM, XFEM-C, XFEM-PN
+methods = ['FEM', 'XFEM-PN']                      # Options: FEM, XFEM-C, XFEM-PN
 l_solver = 'Jacobi'                              # Options: Direct, Jacobi
 l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
 max_iterations = 1.0e4                           # Maximum number of nonconverged linear iterations
