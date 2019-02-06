@@ -123,16 +123,13 @@ def construct_xfem_system(xfem_method):
       F[belem:belem+porder+1] += F_elem
 
   # Enriched Element Contribution
-#  if xfem_method == 'XFEM-C':
-#    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
-#        classic_xfem_cut_elem()
-#  elif xfem_method == 'XFEM-PN':
-#    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
-#        pn_xfem_cut_elem()
+  if xfem_method == 'XFEM-C':
+    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
+        classic_xfem_cut_elem()
+  elif xfem_method == 'XFEM-PN':
+    K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
+        pn_xfem_cut_elem(cut_elnum)
         
-  K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
-      pn_xfem_cut_elem(cut_elnum)
-
   # Apply Boundary Integral
   K, F = BC_apply(K, F)
 
@@ -152,7 +149,11 @@ def construct_xfem_system(xfem_method):
 #   u_j - Storage vector for traditional FEM solution
 #   a_j - Storage vector for enriched nodes
 #   We use psi(x) = Heaviside(phi(x)) [step enrichments]
-#  
+#  A_k = np.zeros((4,4))
+#  F_k = np.zeros(4)
+
+#  for ennode in range(0,len(F_k)):
+    
 
 def pn_xfem_cut_elem(cut_elnum):
 # Phantom Node Literature Definition:
@@ -162,21 +163,21 @@ def pn_xfem_cut_elem(cut_elnum):
   A_k = np.zeros((4,4))
   F_k = np.zeros(4)
   
-  for pnode in range(0,len(F_k),2):
-    J_elem = abs(mat_interf_loc - base_mesh[(cut_elnum-1)+pnode/2])/2
+  for ennode in range(0,len(F_k),2):
+    J_elem = abs(mat_interf_loc - base_mesh[(cut_elnum-1)+ennode/2])/2
     for i in range(porder+1):
       for k in range(porder+1):
-        if (pnode < 2) and mat_A_source:
-          F_k[pnode+i] += b[0,i] * mat_A_src_value * J_elem * wq[k]
-        elif (pnode >= 2) and mat_B_source:
-          F_k[pnode+i] += b[0,i] * mat_B_src_value * J_elem * wq[k]
+        if (ennode < 2) and mat_A_source:
+          F_k[ennode+i] += b[0,i] * mat_A_src_value * J_elem * wq[k]
+        elif (ennode >= 2) and mat_B_source:
+          F_k[ennode+i] += b[0,i] * mat_B_src_value * J_elem * wq[k]
       for j in range(porder+1):
         for k in range(porder+1):
-          if pnode < 2:
-            A_k[pnode+i,pnode+j] += (mat_A_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+          if ennode < 2:
+            A_k[ennode+i,ennode+j] += (mat_A_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
                                     J_elem * wq[k]
-          elif pnode >= 2:
-            A_k[pnode+i,pnode+j] += (mat_B_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
+          elif ennode >= 2:
+            A_k[ennode+i,ennode+j] += (mat_B_conductivity * dbdx[0,i]/J_elem * dbdx[1,j]/J_elem) *\
                                     J_elem * wq[k]
 
   return A_k, F_k
@@ -315,9 +316,9 @@ l_solver = 'Jacobi'                              # Options: Direct, Jacobi
 l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
 max_iterations = 1.0e4                           # Maximum number of nonconverged linear iterations
 l_output = False                                  # Toggle output of the linear solver
-porder = 1                                       # Polynomial degree (must be 1)
 
 # Additional Variables
+porder = 1                                       # Polynomial degree (must be 1)
 eps = 1.0e-8
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
