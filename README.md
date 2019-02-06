@@ -5,7 +5,7 @@ written in Python.
 
 ## Features
 The problem to be solved is a 1D, linear, steady state heat transfer BVP:
- -k (d^2 T)/(dx)^2 = q
+ \[-k \frac{d^2 T}{dx^2} = q\]
 
 Problem options for users to supply:
  - Starting and ending positions for the mesh
@@ -30,7 +30,9 @@ main.py) and the name of the input file (without .py) respectively.
 
 Then simply execute the main.py script using the python excutable:
 
+```
 python main.py
+```
 
 ## Input Variables
 x_min:          [Real] The minimum location value included on the mesh.<br/>
