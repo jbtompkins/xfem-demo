@@ -23,8 +23,12 @@ Users also have the choice between methods used to solve this problem:
  - Phantom Node XFEM solution 
 
 ## Running the Code
-Simply execute the main.py script using the python excutable after editing the
-input variables to run a problem:
+Create a python file with the input variables to describe the desired problem
+options, then edit line 6 and line 8 in main.py to point to the directory of
+the input file (comment out the line if input is in the same directory as
+main.py) and the name of the input file (without .py) respectively.
+
+Then simply execute the main.py script using the python excutable:
 
 python main.py
 
@@ -60,3 +64,12 @@ l_tol:          [Real] Convergence criterion for iterative linear solve methods
                 (Jacobi).
 max_iterations: [Int] Maximum number of nonconverged linear iterations.
 l_output:       [bool] Toggle output of the linear solver.
+
+## Tests
+Several tests are found in the 'tests' folder that evaluate or verify the code's
+performance in various situations:
+ - homog_material
+ - middle_interface
+ - left_interface
+ - right_interface
+ - node_interface

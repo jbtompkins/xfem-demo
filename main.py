@@ -1,6 +1,12 @@
 import numpy as np
 from math import sqrt
 
+import sys
+# Add folder where input file is located to path
+sys.path.insert(0, '/tests')
+# Import user input
+from middle_interface import *
+
 # ******************************************************************************
 # XFEM Demo Code
 # The point of this exercise is to demonstrate various solution methods
@@ -20,6 +26,68 @@ from math import sqrt
 #    - Mesh is not cut; Classical XFEM solution
 #    - Mesh is not cut; Phantom Node XFEM solution
 # ******************************************************************************
+
+def main():
+  global porder
+
+  # Additional Variables
+  porder = 1                                       # Polynomial degree (must be 1)
+  eps = 1.0e-8
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Mesh Construction
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  # Initialize variables as global
+  global delta_x, base_mesh, cut_mesh, num_nodes, num_elems
+
+  # Construct base, equally spaced mesh (used in XFEM calculations)
+  delta_x = (x_max - x_min)/init_num_elems
+  base_mesh = np.arange(x_min, x_max + eps, delta_x)
+
+  # Generate cut mesh (used in FEM calculations)
+  cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
+                       mat_interf_loc)
+  num_nodes = len(cut_mesh)
+  num_elems = num_nodes - 1
+  
+  print(base_mesh)
+  print(cut_mesh)
+  print(mat_interf_loc)
+  
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Run Problem
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  global xq, wq, b, dbdx
+  xq, wq = GLNodeWt(porder + 1)                    # Generate quadrature/weights
+  b, dbdx = feshpln(xq, porder)                    # Generate shape functs and their first derivatives
+  K = []
+  F = []
+  T = []
+  
+  # Loop over solution methods
+  for i in range(len(methods)):
+    K.append(np.zeros(1))
+    F.append(np.zeros(1))
+    T.append(np.zeros(1))
+    if methods[i] == 'FEM':
+      K[i], F[i] = construct_fem_system()
+    elif methods[i] == 'XFEM-C' or methods[i] == 'XFEM-PN':
+      K[i], F[i] = construct_xfem_system(methods[i])
+    else:
+      print('Invalid method input: options are FEM, XFEM-C, XFEM-PN')
+  
+    T_sub = Jacobi_l_solve(K[i], F[i])
+  
+    if left_BC_type == 'Dirichlet':
+      T[i] = np.append(np.array(left_BC_value),T_sub)
+    else:
+      T[i] = T_sub
+    if right_BC_type == 'Dirichlet':
+      T[i] = np.append(T_sub, np.array(right_BC_value))
+  
+    np.savetxt('results_'+methods[i]+'.csv',T[i],fmt='%.8e')
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Assemble material property vectors
@@ -286,87 +354,7 @@ def feshpln(xv, p):
   return (shapefunc, dhdx)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Input/Problem Specification
+# Execution
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Mesh Properties
-x_min = 0.
-x_max = 1.
-delta_x = 0.2
-init_num_elems = 5
-mat_interf_loc = 0.5
-
-# Boundary Condtitions (Options: Neumann, Dirichlet)
-left_BC_type = 'Neumann'
-left_BC_value = 0.0
-right_BC_type = 'Dirichlet'
-right_BC_value = 400.0
-
-# Material Properties
-mat_A_conductivity = 0.3
-mat_B_conductivity = 0.02
-mat_A_source = True
-mat_A_src_value = 2.0                            # Optional Variable
-mat_B_source = True
-mat_B_src_value = 3.5                            # Optional Variable
-
-# Methods and Solvers Options
-methods = ['FEM', 'XFEM-PN']                      # Options: FEM, XFEM-C, XFEM-PN
-l_solver = 'Jacobi'                              # Options: Direct, Jacobi
-l_tol = 1.0e-6                                   # Only used in iterative linear solve methods
-max_iterations = 1.0e4                           # Maximum number of nonconverged linear iterations
-l_output = False                                  # Toggle output of the linear solver
-
-# Additional Variables
-porder = 1                                       # Polynomial degree (must be 1)
-eps = 1.0e-8
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Mesh Construction
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Construct base, equally spaced mesh (used in XFEM calculations)
-delta_x = (x_max - x_min)/init_num_elems
-base_mesh = np.arange(x_min, x_max + eps, delta_x)
-
-# Generate cut mesh (used in FEM calculations)
-cut_mesh = np.insert(base_mesh, np.searchsorted(base_mesh, mat_interf_loc),
-                     mat_interf_loc)
-num_nodes = len(cut_mesh)
-num_elems = num_nodes - 1
-
-print(base_mesh)
-print(cut_mesh)
-print(mat_interf_loc)
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Run Problem
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-xq, wq = GLNodeWt(porder + 1)                    # Generate quadrature/weights
-b, dbdx = feshpln(xq, porder)                    # Generate shape functs and their first derivatives
-K = []
-F = []
-T = []
-
-# Loop over solution methods
-for i in range(len(methods)):
-  K.append(np.zeros(1))
-  F.append(np.zeros(1))
-  T.append(np.zeros(1))
-  if methods[i] == 'FEM':
-    K[i], F[i] = construct_fem_system()
-  elif methods[i] == 'XFEM-C' or methods[i] == 'XFEM-PN':
-    K[i], F[i] = construct_xfem_system(methods[i])
-  else:
-    print('Invalid method input: options are FEM, XFEM-C, XFEM-PN')
-
-  T_sub = Jacobi_l_solve(K[i], F[i])
-
-  if left_BC_type == 'Dirichlet':
-    T[i] = np.append(np.array(left_BC_value),T_sub)
-  else:
-    T[i] = T_sub
-  if right_BC_type == 'Dirichlet':
-    T[i] = np.append(T_sub, np.array(right_BC_value))
-
-  np.savetxt('results_'+methods[i]+'.csv',T[i],fmt='%.8e')
+main()
