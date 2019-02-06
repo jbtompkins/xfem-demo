@@ -38,31 +38,21 @@ x_max:          [Real] The maximum location value included on the mesh.<br/>
 init_num_elems: [Int] The number of elements on the mesh before any cuts.<br/>
 mat_interf_loc: [Real] The location of the interface between the two materials.
 
-left_BC_type:   [String] Type of boundary condition on the left end of the mesh.
-<br/>
-                Options available are Neumann or Dirichlet.<br/>
+left_BC_type:   [String] Type of boundary condition on the left end of the mesh. Options available are Neumann or Dirichlet.<br/>
 left_BC_value:  [Real] Value of the left boundary condition.<br/>
-right_BC_type:  [String] Type of boundary condition on the right end of the<br/>
-                mesh. Options available are Neumann or Dirichlet.<br/>
+right_BC_type:  [String] Type of boundary condition on the right end of the mesh. Options available are Neumann or Dirichlet.<br/>
 right_BC_value: [Real] Value of the right boundary condition.
 
-mat_A_conductivity: [Real] Thermal conductivity of the material left of the<br/>
-                    interface.<br/>
-mat_B_conductivity: [Real] Thermal conductivity of the material right of the<br/>
-                    interface.<br/>
-mat_A_source:       [bool] True if there is a source distributed through the<br/>
-                    material left of the interface.<br/>
+mat_A_conductivity: [Real] Thermal conductivity of the material left of the interface.<br/>
+mat_B_conductivity: [Real] Thermal conductivity of the material right of the interface.<br/>
+mat_A_source:       [bool] True if there is a source distributed through the material left of the interface.<br/>
 mat_A_src_value:    [Real](optional) Value of the left material source.<br/>
-mat_B_source:       [bool] True if there is a source distributed through the<br/>
-                    material right of the interface.<br/>
+mat_B_source:       [bool] True if there is a source distributed through the material right of the interface.<br/>
 mat_B_src_value:    [Real](optional) Value of the right material source.
 
-methods:        [[String] List] List of strings detailing the methods to run.<br/>
-                Options available are FEM, XFEM-C, XFEM-PN.<br/>
-l_solver:       [String] Type of linear solve to perform. Options available<br/>
-                are Jacobi.<br/>
-l_tol:          [Real] Convergence criterion for iterative linear solve methods<br/>
-                (Jacobi).<br/>
+methods:        [[String] List] List of strings detailing the methods to run. Options available are FEM, XFEM-C, XFEM-PN.<br/>
+l_solver:       [String] Type of linear solve to perform. Options available are Jacobi.<br/>
+l_tol:          [Real] Convergence criterion for iterative linear solve methods (Jacobi).<br/>
 max_iterations: [Int] Maximum number of nonconverged linear iterations.<br/>
 l_output:       [bool] Toggle output of the linear solver.<br/>
 
