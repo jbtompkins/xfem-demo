@@ -5,7 +5,7 @@ import sys
 # Add folder where input file is located to path
 sys.path.insert(0, '/tests')
 # Import user input
-from middle_interface import *
+from tests.homog_material import *
 
 # ******************************************************************************
 # XFEM Demo Code
@@ -50,11 +50,11 @@ def main():
                        mat_interf_loc)
   num_nodes = len(cut_mesh)
   num_elems = num_nodes - 1
-  
+
   print(base_mesh)
   print(cut_mesh)
   print(mat_interf_loc)
-  
+
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Run Problem
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,7 +64,7 @@ def main():
   K = []
   F = []
   T = []
-  
+
   # Loop over solution methods
   for i in range(len(methods)):
     K.append(np.zeros(1))
@@ -76,16 +76,16 @@ def main():
       K[i], F[i] = construct_xfem_system(methods[i])
     else:
       print('Invalid method input: options are FEM, XFEM-C, XFEM-PN')
-  
+
     T_sub = Jacobi_l_solve(K[i], F[i])
-  
+
     if left_BC_type == 'Dirichlet':
       T[i] = np.append(np.array(left_BC_value),T_sub)
     else:
       T[i] = T_sub
     if right_BC_type == 'Dirichlet':
       T[i] = np.append(T_sub, np.array(right_BC_value))
-  
+
     np.savetxt('results_'+methods[i]+'.csv',T[i],fmt='%.8e')
 
 
@@ -112,8 +112,8 @@ def q_vector_assemble():
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def construct_fem_system():
-# Weak Form: 
-# int_domain (k grad T grad b) = int_bd_domain (b k grad T n) + 
+# Weak Form:
+# int_domain (k grad T grad b) = int_bd_domain (b k grad T n) +
 #     int_domain (b q)
 # [K]{T} = {F} + {B}
 
@@ -146,7 +146,7 @@ def construct_fem_system():
   print('\n')
   print(F)
   print('\n')
-  
+
   return (K, F)
 
 def construct_xfem_system(xfem_method):
@@ -197,7 +197,7 @@ def construct_xfem_system(xfem_method):
   elif xfem_method == 'XFEM-PN':
     K[cut_elnum-1:cut_elnum+3,cut_elnum-1:cut_elnum+3], F[cut_elnum-1:cut_elnum+3] = \
         pn_xfem_cut_elem(cut_elnum)
-        
+
   # Apply Boundary Integral
   K, F = BC_apply(K, F)
 
@@ -221,7 +221,7 @@ def construct_xfem_system(xfem_method):
 #  F_k = np.zeros(4)
 
 #  for ennode in range(0,len(F_k)):
-    
+
 
 def pn_xfem_cut_elem(cut_elnum):
 # Phantom Node Literature Definition:
@@ -230,7 +230,7 @@ def pn_xfem_cut_elem(cut_elnum):
 #   psi(x) = H(phi(x)), but the implementation is not the same.
   A_k = np.zeros((4,4))
   F_k = np.zeros(4)
-  
+
   for ennode in range(0,len(F_k),2):
     J_elem = abs(mat_interf_loc - base_mesh[(cut_elnum-1)+ennode/2])/2
     for i in range(porder+1):
@@ -280,7 +280,7 @@ def BC_apply(A, b):
 def Jacobi_l_solve(A, b):
   err = 1.0e12
   iter_count = 0
-  
+
   x = np.zeros_like(b)
 
   while (iter_count < max_iterations) and (err > l_tol):
@@ -336,7 +336,7 @@ def feshpln(xv, p):
         num *= (xv - xd[j])
         den *= (xd[i] - xd[j])
     shapefunc[:,i] = num/den
-  
+
   # Derivative of the shape function
   for i in range(0, p+1):
     sum_tot = 0.
